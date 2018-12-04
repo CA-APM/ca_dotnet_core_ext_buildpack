@@ -10,7 +10,7 @@ import (
 	"strings"
 	"strconv"
 	"fmt"
-	"errors"
+	//"errors"
 	"os"
 	"io/ioutil"
 )
@@ -55,10 +55,6 @@ func (s *Supplier) Run() error {
 	if err := DownloadAgent(s); err != nil {
 		return err
 	}
-
-	if err := WriteProfileScript(s); err != nil {
-		return err
-	}
 	
 	// Resolve the EM URL
 	var agentManagerURL string
@@ -68,8 +64,10 @@ func (s *Supplier) Run() error {
 	}
 	
 	if agentManagerURL == "" {
-		s.Log.Error("Failed to determine EM URL")
-		return errors.New("Failed to determine EM URL")
+		s.Log.Error("Failed to determine EM URL. Please bind the app to an Introscope service.")
+		
+		// Log the error but don't fail
+		//return errors.New("Failed to determine EM URL")
 	}
 	
 	// Update all properties in credentials
@@ -82,6 +80,31 @@ func (s *Supplier) Run() error {
 		if err := UpdateAgentProperty(s, key, valueObj.(string)); err != nil {
 			return err
 		}
+	}
+	
+	var appName string
+	applicationProps := GetApplicationProperties(s)
+	if applicationProps != nil {
+		// Set APMENV_AGENT_NAME to this app name
+		appName = applicationProps["application_name"].(string)
+		s.Log.Info("Setting APMENV_AGENT_NAME to %s", appName)
+		if err := UpdateAgentProperty(s, "introscope.agent.agentNameSystemPropertyKey", "APMENV_AGENT_NAME"); err != nil {
+			return err
+		}
+	
+		// set the hostname to the first application URI
+		appURIs := applicationProps["application_uris"].([]interface{})
+		if appURIs != nil {
+			appHostName := appURIs[0].(string)
+			s.Log.Info("Setting introscope.agent.hostName to %s", appHostName)
+			if err := UpdateAgentProperty(s, "introscope.agent.hostName", appHostName); err != nil {
+				return err
+			}
+		}
+	}
+	
+	if err := WriteProfileScript(s, appName); err != nil {
+		return err
 	}
 	
 	return nil
@@ -103,14 +126,15 @@ func DownloadAgent(s *Supplier) error {
 	return nil
 }
 
-func WriteProfileScript(s *Supplier) error {
+func WriteProfileScript(s *Supplier, appName string) error {
 	
 	// Write APM startup script to profile.d 
 	if err := os.Mkdir(filepath.Join(s.Stager.DepDir(), "profile.d"), 0777); err != nil {
 		return err
 	}
 	
-	if err := ioutil.WriteFile(filepath.Join(s.Stager.DepDir(), "profile.d/apm.sh"), []byte(`
+	apmScriptPath := filepath.Join(s.Stager.DepDir(), "profile.d/apm.sh")
+	if err := ioutil.WriteFile(apmScriptPath, []byte(`
 		export CORECLR_ENABLE_PROFILING=1
 		export CORECLR_PROFILER={5F048FC6-251C-4684-8CCA-76047B02AC98}
 		export CORECLR_PROFILER_PATH=/home/vcap/apm/wily/bin/wily.NativeProfiler.so
@@ -119,11 +143,25 @@ func WriteProfileScript(s *Supplier) error {
 		return err
 	}
 	
+	// If the app name is set append the export
+	if appName != "" {
+		// Append the new key/value
+		fileHandle, err := os.OpenFile(apmScriptPath, os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			return err
+		}
+		defer fileHandle.Close()
+		writer := bufio.NewWriter(fileHandle)
+
+		fmt.Fprintln(writer, fmt.Sprintf("\nexport APMENV_AGENT_NAME=%s", appName))
+		writer.Flush()
+	}
+	
 	return nil
 }
 
 func GetIntroscopeCredentials(s *Supplier) map[string]interface{} {
-		// Parse Services
+	// Parse Services
 	var services map[string]interface{}
 	serviceBytes := []byte(os.Getenv("VCAP_SERVICES"))
 	if err := json.Unmarshal(serviceBytes, &services); err != nil {
@@ -146,6 +184,17 @@ func GetIntroscopeCredentials(s *Supplier) map[string]interface{} {
 	}
 	
 	return nil
+}
+
+func GetApplicationProperties(s *Supplier) map[string]interface{} {
+	// Parse Application JSON
+	var appProps map[string]interface{}
+	appJSONBytes := []byte(os.Getenv("VCAP_APPLICATION"))
+	if err := json.Unmarshal(appJSONBytes, &appProps); err != nil {
+		return nil
+	}
+
+	return appProps
 }
 
 func UpdateAgentProperty(s *Supplier, key string, value string) error {
