@@ -4,9 +4,9 @@ default_versions:
 dependency_deprecation_dates:
 dependencies:
 - name: apm
-  version: 10.6.0
+  version: 99.99.0
   uri: https://ca.bintray.com/ncore/dotnet-agent-linux.zip
-  sha256: f42d876ead39032465195f9df3afa61f6a7f39eedd49c67b1d76e96c57605371
+  sha256: 7d83dfdd74382ef5bf2c6b23914f5a795972a0fec83f7b57524cb3717c575112
   cf_stacks:
   - cflinuxfs2
   - cflinuxfs3

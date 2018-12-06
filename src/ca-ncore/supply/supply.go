@@ -92,7 +92,7 @@ func DownloadAgent(s *Supplier) error {
 	// Download the agent zip
 	agentZip := filepath.Join(s.Stager.DepDir(), "apm.zip")
 	
-	if err := s.Installer.FetchDependency(libbuildpack.Dependency{Name: "apm", Version: "10.6.0"}, agentZip); err != nil {
+	if err := s.Installer.FetchDependency(libbuildpack.Dependency{Name: "apm", Version: "99.99.0"}, agentZip); err != nil {
 		return err
 	}
 
