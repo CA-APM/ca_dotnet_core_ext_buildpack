@@ -56,9 +56,13 @@ func (s *Supplier) Run() error {
 		return err
 	}
 
+	s.Log.Info("Downloaded agent")
+
 	if err := WriteProfileScript(s); err != nil {
 		return err
 	}
+
+	s.Log.Info("Written profile")
 	
 	// Resolve the EM URL
 	var agentManagerURL string
@@ -68,8 +72,9 @@ func (s *Supplier) Run() error {
 	}
 	
 	if agentManagerURL == "" {
-		s.Log.Error("Failed to determine EM URL")
-		return errors.New("Failed to determine EM URL")
+		s.Log.Error("Failed to determine EM URL, please create introscope service and bind service to app")
+		return nil
+		// return errors.New("Failed to determine EM URL")
 	}
 	
 	// Update all properties in credentials
