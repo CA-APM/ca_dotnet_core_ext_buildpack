@@ -10,7 +10,8 @@ import (
 	"strings"
 	"strconv"
 	"fmt"
-	//"errors"
+	"regexp"
+	"errors"
 	"os"
 	"io/ioutil"
 )
@@ -56,6 +57,8 @@ func (s *Supplier) Run() error {
 		return err
 	}
 	
+	s.Log.Info("Downloaded agent")
+	
 	// Resolve the EM URL
 	var agentManagerURL string
 	credentials := GetIntroscopeCredentials(s)
@@ -67,7 +70,7 @@ func (s *Supplier) Run() error {
 		s.Log.Error("Failed to determine EM URL. Please bind the app to an Introscope service.")
 		
 		// Log the error but don't fail
-		//return errors.New("Failed to determine EM URL")
+		return errors.New("Failed to determine EM URL")
 	}
 	
 	// Update all properties in credentials
@@ -107,6 +110,8 @@ func (s *Supplier) Run() error {
 		return err
 	}
 	
+	s.Log.Info("Written profile")
+	
 	return nil
 }
 
@@ -115,7 +120,7 @@ func DownloadAgent(s *Supplier) error {
 	// Download the agent zip
 	agentZip := filepath.Join(s.Stager.DepDir(), "apm.zip")
 	
-	if err := s.Installer.FetchDependency(libbuildpack.Dependency{Name: "apm", Version: "10.6.0"}, agentZip); err != nil {
+	if err := s.Installer.FetchDependency(libbuildpack.Dependency{Name: "apm", Version: "99.99.0"}, agentZip); err != nil {
 		return err
 	}
 
@@ -232,8 +237,11 @@ func UpdateAgentProperty(s *Supplier, key string, value string) error {
 		profileWriter := bufio.NewWriter(profileFile)
 	
 		// Replace the value
+		escKey := strings.Replace(regexp.QuoteMeta(key), "/", "\\/", -1)
+		escValue := strings.Replace(regexp.QuoteMeta(value), "/", "\\/", -1)
+		s.Log.Debug("sed expr: %s", fmt.Sprintf("s/^%s=.*/%s=%s/", escKey, escKey, escValue))
 		if err := s.Command.Execute(s.Stager.DepDir(), profileWriter, os.Stderr, 
-			"/bin/sed", fmt.Sprintf("s/^%s=.*/%s=%s/", key, key, value), tempProfilePath); err != nil {
+			"/bin/sed", fmt.Sprintf("s/^%s=.*/%s=%s/", escKey, escKey, escValue), tempProfilePath); err != nil {
 			return err
 		}
 	
