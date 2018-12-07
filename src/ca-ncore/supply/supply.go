@@ -72,9 +72,7 @@ func (s *Supplier) Run() error {
 	}
 	
 	if agentManagerURL == "" {
-		s.Log.Error("Failed to determine EM URL, please create introscope service and bind service to app")
-		return nil
-		// return errors.New("Failed to determine EM URL")
+		return errors.New("Failed to determine EM URL, please create introscope service and bind service to app")
 	}
 	
 	// Update all properties in credentials
