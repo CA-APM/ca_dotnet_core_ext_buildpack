@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"fmt"
 	"regexp"
-	"errors"
 	"os"
 	"io/ioutil"
 )
@@ -70,7 +69,7 @@ func (s *Supplier) Run() error {
 		s.Log.Error("Failed to determine EM URL. Please bind the app to an Introscope service.")
 		
 		// Log the error but don't fail
-		return errors.New("Failed to determine EM URL")
+		//return errors.New("Failed to determine EM URL")
 	}
 	
 	// Update all properties in credentials
