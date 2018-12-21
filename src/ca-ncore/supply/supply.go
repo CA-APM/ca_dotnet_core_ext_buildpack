@@ -21,6 +21,7 @@ type Stager interface {
 	DepDir() string
 	DepsIdx() string
 	DepsDir() string
+	ProfileDir() string
 }
 
 type Manifest interface {
@@ -180,6 +181,9 @@ func WriteProfileScript(s *Supplier, appName string) error {
 			set COR_ENABLE_PROFILING=1
 			set COR_PROFILER={5F048FC6-251C-4684-8CCA-76047B02AC98}
 			set COR_PROFILER_PATH=C:\Users\vcap\apm\wily\bin\wily.NativeProfiler.dll
+			set CORECLR_ENABLE_PROFILING=1
+			set CORECLR_PROFILER={5F048FC6-251C-4684-8CCA-76047B02AC98}
+			set CORECLR_PROFILER_PATH=C:\Users\vcap\apm\wily\bin\wily.NativeProfiler.dll
 			set com.wily.introscope.agentProfile=C:\Users\vcap\apm\wily\IntroscopeAgent.profile
 			`), 0666); err != nil {
 			return err
@@ -197,6 +201,15 @@ func WriteProfileScript(s *Supplier, appName string) error {
 
 			fmt.Fprintln(writer, fmt.Sprintf("\nset APMENV_AGENT_NAME=%s", appName))
 			writer.Flush()
+		}
+		
+		// Support binary buildpack 
+		// deps/profile.d scripts are not copied. Add script to app/.profile.d
+		dest := filepath.Join(s.Stager.ProfileDir(), s.Stager.DepsIdx()+"_apm.bat")
+		s.Log.Info("Copying apm.bat to %s", dest)
+
+		if err := libbuildpack.CopyFile(apmScriptPath, dest); err != nil {
+			return err
 		}
 	}
 	
