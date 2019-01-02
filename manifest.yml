@@ -3,18 +3,27 @@ language: ca-ncore
 default_versions:
 dependency_deprecation_dates:
 dependencies:
-- name: apm
+- name: apm-linux
   version: 99.99.0
   uri: https://ca.bintray.com/ncore/dotnet-agent-linux.zip
   sha256: 7d83dfdd74382ef5bf2c6b23914f5a795972a0fec83f7b57524cb3717c575112
   cf_stacks:
   - cflinuxfs2
   - cflinuxfs3
+- name: apm-windows
+  version: 99.99.0
+  uri: https://broadcom.bintray.com/dotnet-agent/dotnet-agent-99.99.taurus_net_core-SNAPSHOT-dotnet-noinstaller-x64.zip
+  sha256: 8596fd5ce9ecda5973a18b0ccd7bda8e9b4fc57a291e7c7abb3b99de0d472d3f
+  cf_stacks:
+  - windows
+  - windows2012R2
+  - windows2016
 include_files:
   - README.md
   - VERSION
   - bin/detect
   - bin/compile
   - bin/supply
+  - bin/supply.exe
   - manifest.yml
 pre_package: scripts/build.sh

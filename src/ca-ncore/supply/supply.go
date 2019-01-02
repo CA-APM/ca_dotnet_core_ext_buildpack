@@ -21,6 +21,7 @@ type Stager interface {
 	DepDir() string
 	DepsIdx() string
 	DepsDir() string
+	ProfileDir() string
 }
 
 type Manifest interface {
@@ -84,6 +85,12 @@ func (s *Supplier) Run() error {
 		}
 	}
 	
+	if IsWindows() {
+		if err := UpdateAgentProperty(s, "introscope.agent.dotnet.monitorApplications", "hwc.exe"); err != nil {
+			return err
+		}
+	}
+	
 	var appName string
 	applicationProps := GetApplicationProperties(s)
 	if applicationProps != nil {
@@ -119,7 +126,12 @@ func DownloadAgent(s *Supplier) error {
 	// Download the agent zip
 	agentZip := filepath.Join(s.Stager.DepDir(), "apm.zip")
 	
-	if err := s.Installer.FetchDependency(libbuildpack.Dependency{Name: "apm", Version: "99.99.0"}, agentZip); err != nil {
+	depName := "apm-linux"
+	if IsWindows() {
+		depName = "apm-windows"
+	}
+	
+	if err := s.Installer.FetchDependency(libbuildpack.Dependency{Name: depName, Version: "99.99.0"}, agentZip); err != nil {
 		return err
 	}
 
@@ -137,28 +149,68 @@ func WriteProfileScript(s *Supplier, appName string) error {
 		return err
 	}
 	
-	apmScriptPath := filepath.Join(s.Stager.DepDir(), "profile.d/apm.sh")
-	if err := ioutil.WriteFile(apmScriptPath, []byte(`
-		export CORECLR_ENABLE_PROFILING=1
-		export CORECLR_PROFILER={5F048FC6-251C-4684-8CCA-76047B02AC98}
-		export CORECLR_PROFILER_PATH=/home/vcap/apm/wily/bin/wily.NativeProfiler.so
-		export APMENV_AGENT_PROFILE=/home/vcap/apm/wily/IntroscopeAgent.profile
-		`), 0666); err != nil {
-		return err
-	}
-	
-	// If the app name is set append the export
-	if appName != "" {
-		// Append the new key/value
-		fileHandle, err := os.OpenFile(apmScriptPath, os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
+	if IsLinux() {
+		apmScriptPath := filepath.Join(s.Stager.DepDir(), "profile.d/apm.sh")
+		if err := ioutil.WriteFile(apmScriptPath, []byte(`
+			export CORECLR_ENABLE_PROFILING=1
+			export CORECLR_PROFILER={5F048FC6-251C-4684-8CCA-76047B02AC98}
+			export CORECLR_PROFILER_PATH=/home/vcap/apm/wily/bin/wily.NativeProfiler.so
+			export APMENV_AGENT_PROFILE=/home/vcap/apm/wily/IntroscopeAgent.profile
+			`), 0666); err != nil {
 			return err
 		}
-		defer fileHandle.Close()
-		writer := bufio.NewWriter(fileHandle)
+		
+		// If the app name is set append the export
+		if appName != "" {
+			// Append the new key/value
+			fileHandle, err := os.OpenFile(apmScriptPath, os.O_WRONLY|os.O_APPEND, 0644)
+			if err != nil {
+				return err
+			}
+			defer fileHandle.Close()
+			writer := bufio.NewWriter(fileHandle)
 
-		fmt.Fprintln(writer, fmt.Sprintf("\nexport APMENV_AGENT_NAME=%s", appName))
-		writer.Flush()
+			fmt.Fprintln(writer, fmt.Sprintf("\nexport APMENV_AGENT_NAME=%s", appName))
+			writer.Flush()
+		}
+	}
+	
+	if IsWindows() {
+		apmScriptPath := filepath.Join(s.Stager.DepDir(), "profile.d/apm.bat")
+		if err := ioutil.WriteFile(apmScriptPath, []byte(`
+			set COR_ENABLE_PROFILING=1
+			set COR_PROFILER={5F048FC6-251C-4684-8CCA-76047B02AC98}
+			set COR_PROFILER_PATH=C:\Users\vcap\apm\wily\bin\wily.NativeProfiler.dll
+			set CORECLR_ENABLE_PROFILING=1
+			set CORECLR_PROFILER={5F048FC6-251C-4684-8CCA-76047B02AC98}
+			set CORECLR_PROFILER_PATH=C:\Users\vcap\apm\wily\bin\wily.NativeProfiler.dll
+			set com.wily.introscope.agentProfile=C:\Users\vcap\apm\wily\IntroscopeAgent.profile
+			`), 0666); err != nil {
+			return err
+		}
+		
+		// If the app name is set append the export
+		if appName != "" {
+			// Append the new key/value
+			fileHandle, err := os.OpenFile(apmScriptPath, os.O_WRONLY|os.O_APPEND, 0644)
+			if err != nil {
+				return err
+			}
+			defer fileHandle.Close()
+			writer := bufio.NewWriter(fileHandle)
+
+			fmt.Fprintln(writer, fmt.Sprintf("\nset APMENV_AGENT_NAME=%s", appName))
+			writer.Flush()
+		}
+		
+		// Support binary buildpack 
+		// deps/profile.d scripts are not copied. Add script to app/.profile.d
+		dest := filepath.Join(s.Stager.ProfileDir(), s.Stager.DepsIdx()+"_apm.bat")
+		s.Log.Info("Copying apm.bat to %s", dest)
+
+		if err := libbuildpack.CopyFile(apmScriptPath, dest); err != nil {
+			return err
+		}
 	}
 	
 	return nil
@@ -204,48 +256,56 @@ func GetApplicationProperties(s *Supplier) map[string]interface{} {
 func UpdateAgentProperty(s *Supplier, key string, value string) error {
 	profilePath := filepath.Join(s.Stager.DepDir(), "../../apm/wily/IntroscopeAgent.profile")
 	
-	// Check if the key exists
-	var grepBuff bytes.Buffer
-	grepWriter := bufio.NewWriter(&grepBuff)
-	_ = s.Command.Execute(s.Stager.DepDir(), grepWriter, os.Stderr, 
-		"/bin/grep", "-c", fmt.Sprintf("^%s=", key), profilePath)
+	updated := false
 	
-	keyCount, err := strconv.Atoi(strings.TrimSpace(grepBuff.String()))
-	if err != nil {
-		s.Log.Error("grep failed: %s", grepBuff.String())
-		return err
+	if IsLinux() {
+		// Check if the key exists
+		var grepBuff bytes.Buffer
+		grepWriter := bufio.NewWriter(&grepBuff)
+		_ = s.Command.Execute(s.Stager.DepDir(), grepWriter, os.Stderr, 
+			"/bin/grep", "-c", fmt.Sprintf("^%s=", key), profilePath)
+		
+		keyCount, err := strconv.Atoi(strings.TrimSpace(grepBuff.String()))
+		if err != nil {
+			s.Log.Error("grep failed: %s", grepBuff.String())
+			return err
+		}
+		
+		//s.Log.Info("Count for %s = %d", key, keyCount)
+		if keyCount > 0 {
+			// Replace the existing value
+			
+			// Create a copy of the current profile
+			tempProfilePath := filepath.Join(s.Stager.DepDir(), "temp_IntroscopeAgent.profile")
+			
+			if err := libbuildpack.CopyFile(profilePath, tempProfilePath); err != nil {
+				return err
+			}
+		
+			// Create a buffered writer for the profile output
+			profileFile, err := os.Create(profilePath)
+			if err != nil {
+				return err
+			}
+		
+			profileWriter := bufio.NewWriter(profileFile)
+		
+			// Replace the value
+			escKey := strings.Replace(regexp.QuoteMeta(key), "/", "\\/", -1)
+			escValue := strings.Replace(regexp.QuoteMeta(value), "/", "\\/", -1)
+			s.Log.Debug("sed expr: %s", fmt.Sprintf("s/^%s=.*/%s=%s/", escKey, escKey, escValue))
+			if err := s.Command.Execute(s.Stager.DepDir(), profileWriter, os.Stderr, 
+				"/bin/sed", fmt.Sprintf("s/^%s=.*/%s=%s/", escKey, escKey, escValue), tempProfilePath); err != nil {
+				return err
+			}
+		
+			profileWriter.Flush()
+			
+			updated = true
+		} 
 	}
 	
-	//s.Log.Info("Count for %s = %d", key, keyCount)
-	if keyCount > 0 {
-		// Replace the existing value
-		
-		// Create a copy of the current profile
-		tempProfilePath := filepath.Join(s.Stager.DepDir(), "temp_IntroscopeAgent.profile")
-		
-		if err := libbuildpack.CopyFile(profilePath, tempProfilePath); err != nil {
-			return err
-		}
-	
-		// Create a buffered writer for the profile output
-		profileFile, err := os.Create(profilePath)
-		if err != nil {
-			return err
-		}
-	
-		profileWriter := bufio.NewWriter(profileFile)
-	
-		// Replace the value
-		escKey := strings.Replace(regexp.QuoteMeta(key), "/", "\\/", -1)
-		escValue := strings.Replace(regexp.QuoteMeta(value), "/", "\\/", -1)
-		s.Log.Debug("sed expr: %s", fmt.Sprintf("s/^%s=.*/%s=%s/", escKey, escKey, escValue))
-		if err := s.Command.Execute(s.Stager.DepDir(), profileWriter, os.Stderr, 
-			"/bin/sed", fmt.Sprintf("s/^%s=.*/%s=%s/", escKey, escKey, escValue), tempProfilePath); err != nil {
-			return err
-		}
-	
-		profileWriter.Flush()
-	} else {
+	if !updated {
 		// Append the new key/value
 		fileHandle, err := os.OpenFile(profilePath, os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
@@ -262,3 +322,20 @@ func UpdateAgentProperty(s *Supplier, key string, value string) error {
 	return nil
 }
 
+func IsWindows() bool {
+	cfStack := os.Getenv("CF_STACK")
+	if strings.Contains(cfStack, "windows") {
+		return true
+	}
+	
+	return false
+}
+
+func IsLinux() bool {
+	cfStack := os.Getenv("CF_STACK")
+	if strings.Contains(cfStack, "cflinux") {
+		return true
+	}
+	
+	return false
+}
