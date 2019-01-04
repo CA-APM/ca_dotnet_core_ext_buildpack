@@ -1,5 +1,5 @@
 ---
-language: ca-ncore
+language: ca_dotnet_core_ext
 default_versions:
 dependency_deprecation_dates:
 dependencies:
