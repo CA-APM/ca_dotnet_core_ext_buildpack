@@ -1,60 +1,32 @@
-### Buildpack User Documentation
+### Introduction
+This is an extension buildpack for .NET Core, HWC and binary buildpack. 
+### Pre-requisites
+CF CLI version 6.38 or later.
+### How to use?
+1. Deploy your app.
+		For example:
+cf push <app_name> -p <path to your app folder> -b dotnet_core_buildpack
 
-### Building the Buildpack
-To build this buildpack, run the following command from the buildpack's directory:
+2. Define the introscope service by running the following Cf CLI command. 
+		
+cf cups introscope -p {"url":"<value of the agent manager url>","agentManager.credential":"<credential only if connecting to SaaS EM>"}
 
-1. Source the .envrc file in the buildpack directory.
-```bash
-source .envrc
-```
-To simplify the process in the future, install [direnv](https://direnv.net/) which will automatically source .envrc when you change directories.
+Example for SaaS instance:
+cf cups introscope -p '{"url":"https://665777.apm.cloud.ca.com:443","agentManager.credential":"0c3db026-a762-49e0-b467-52e5173de8db"}'
 
-1. Install buildpack-packager
-```bash
-./scripts/install_tools.sh
-```
+*On Prem example:
+cf cups introscope -p {"url":”11.12.13.14:80”}’
+Note: The service name must be introscope.
 
-1. Build the buildpack
-```bash
-buildpack-packager build
-```
+3. Bind your app to this service
+		cf bind-service <app_name> introscope
 
-1. Use in Cloud Foundry
-Upload the buildpack to your Cloud Foundry and optionally specify it by name
+4.Push the app again using the extension buildpack
+cf push <app_name> -p <path to your app folder> -b https://github.com/CA-APM/ca_dotnet_core_ext_buildpack -b dotnet_core_buildpack
+Note: You can keep the other arguments for the above command if you wanted to use for your application deployment.
 
-```bash
-cf create-buildpack [BUILDPACK_NAME] [BUILDPACK_ZIP_FILE_PATH] 1
-cf push my_app [-b BUILDPACK_NAME]
-```
-
-### Testing
-Buildpacks use the [Cutlass](https://github.com/cloudfoundry/libbuildpack/cutlass) framework for running integration tests.
-
-To test this buildpack, run the following command from the buildpack's directory:
-
-1. Source the .envrc file in the buildpack directory.
-
-```bash
-source .envrc
-```
-To simplify the process in the future, install [direnv](https://direnv.net/) which will automatically source .envrc when you change directories.
-
-1. Run unit tests
-
-```bash
-./scripts/unit.sh
-```
-
-1. Run integration tests
-
-```bash
-./scripts/integration.sh
-```
-
-More information can be found on Github [cutlass](https://github.com/cloudfoundry/libbuildpack/cutlass).
-
-### Reporting Issues
-Open an issue on this project
+5. Access your application 
+5. Check the APM Server for agents to be connected and related performance metrics.
 
 ## Disclaimer
 This buildpack is experimental and not yet intended for production use.
