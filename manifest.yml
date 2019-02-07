@@ -12,8 +12,8 @@ dependencies:
   - cflinuxfs3
 - name: apm-windows
   version: 99.99.0
-  uri: https://broadcom.bintray.com/dotnet-agent/dotnet-agent-99.99.taurus_net_core-SNAPSHOT-dotnet-noinstaller-x64.zip
-  sha256: 8596fd5ce9ecda5973a18b0ccd7bda8e9b4fc57a291e7c7abb3b99de0d472d3f
+  uri: https://ca.bintray.com/ncore/dotnet-agent-99.99.taurus_net_core.zip
+  sha256: fda63583892c414b2a46a0e60b56a0b099c8aeebf2c21df72b5ce7972ed43eab
   cf_stacks:
   - windows
   - windows2012R2

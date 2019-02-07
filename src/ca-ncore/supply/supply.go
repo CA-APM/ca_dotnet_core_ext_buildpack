@@ -63,7 +63,12 @@ func (s *Supplier) Run() error {
 	var agentManagerURL string
 	credentials := GetIntroscopeCredentials(s)
 	if credentials != nil {
-		agentManagerURL = credentials["url"].(string)
+
+		if(credentials["url"] != nil) {
+			agentManagerURL = credentials["url"].(string)
+		} else if(credentials["agent_manager_url"] != nil) {
+			agentManagerURL = credentials["agent_manager_url"].(string)
+		}
 	}
 	
 	if agentManagerURL == "" {
@@ -75,7 +80,7 @@ func (s *Supplier) Run() error {
 	
 	// Update all properties in credentials
 	for key, valueObj := range credentials {
-		if key == "url" {
+		if (key == "url" || key == "agent_manager_url") {
 			key = "agentManager.url.1"
 		}
 		
