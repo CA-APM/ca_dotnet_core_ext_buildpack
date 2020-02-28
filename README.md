@@ -1,3 +1,5 @@
+## :warning: This is no longer being maintained. The buildpack is avaiable in PCF tile.
+
 # CA APM .NET Buildpack For CloudFoundry
 
 # Description
